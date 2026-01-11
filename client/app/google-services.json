@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "550689362288",
+    "project_id": "gpuhotdeal",
+    "storage_bucket": "gpuhotdeal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:550689362288:android:721deb133e4382c9657fb5",
+        "android_client_info": {
+          "package_name": "com.example.jupjup"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe4GoT_n9Z-HlhEBfaTUsF-4_zW0W5cow"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
