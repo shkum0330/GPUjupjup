@@ -1,5 +1,7 @@
 package com.example.jupjup
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -24,6 +26,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 알림을 누르고 들어왔는지 확인
+        checkIntentForUrl(intent)
+
         val db = Firebase.firestore
 
         setContent {
@@ -32,39 +37,42 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // 화면을 그리기 전에 토큰부터 가져옴
                     TokenAwareScreen(db)
                 }
             }
         }
     }
 
+    // 알림에 URL이 들어있으면 브라우저를 연다
+    private fun checkIntentForUrl(intent: Intent?) {
+        val url = intent?.getStringExtra("url")
+        if (!url.isNullOrEmpty()) {
+            Log.d("Jupjup", "알림 타고 들어옴! URL 이동: $url")
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(browserIntent)
+        }
+    }
+
+
     @Composable
     fun TokenAwareScreen(db: FirebaseFirestore) {
-        // 토큰 상태 관리
         var myToken by remember { mutableStateOf<String?>(null) }
 
-        // 토큰 가져오기 - 앱이 켜지면 딱 한 번 실행
         LaunchedEffect(Unit) {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
-                    Log.w("FCM", "토큰 가져오기 실패", task.exception)
                     return@addOnCompleteListener
                 }
-                val token = task.result
-                Log.d("FCM", "내 기기 토큰: $token")
-                myToken = token
+                myToken = task.result
             }
         }
 
         if (myToken != null) {
-            // 토큰이 준비되면 화면을 보여줌
             KeywordScreen(db, myToken!!)
         } else {
-            // 토큰을 가져오는 중이면 로딩 화면
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
-                Text("알림 주소를 가져오는 중...", modifier = Modifier.padding(top = 50.dp))
+                Text("로딩 중...", modifier = Modifier.padding(top = 50.dp))
             }
         }
     }
@@ -80,7 +88,6 @@ class MainActivity : ComponentActivity() {
         ) {
             Text(text = "줍줍 설정", style = MaterialTheme.typography.headlineMedium)
 
-            // 토큰이 잘 따졌는지 화면에 살짝 보여줌 (개발용)
             Text(
                 text = "내 기기 ID: ${userToken.take(10)}...",
                 style = MaterialTheme.typography.bodySmall,
@@ -127,14 +134,10 @@ class MainActivity : ComponentActivity() {
             if (document.exists()) {
                 docRef.update("subscribers", FieldValue.arrayUnion(token))
             } else {
-                val data = hashMapOf(
-                    "subscribers" to arrayListOf(token)
-                )
+                val data = hashMapOf("subscribers" to arrayListOf(token))
                 docRef.set(data)
             }
-            Toast.makeText(this, "'$keyword' 알림 등록 완료!", Toast.LENGTH_SHORT).show()
-        }.addOnFailureListener { e ->
-            Toast.makeText(this, "에러: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "'$keyword' 등록 완료", Toast.LENGTH_SHORT).show()
         }
     }
 }
