@@ -4,6 +4,8 @@ import time
 import firebase_admin
 from firebase_admin import credentials, firestore, messaging
 from datetime import datetime
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # firebase 설정
 if not firebase_admin._apps:
@@ -16,6 +18,25 @@ TARGET_URL = "https://quasarzone.com/bbs/qb_tsy"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
+REQUEST_TIMEOUT = (5, 15)
+
+
+def create_http_session():
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset(["GET"]),
+        respect_retry_after_header=True,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+http_session = create_http_session()
 
 def get_post_id(link):
     return link.split('/')[-1].split('?')[0]
@@ -84,10 +105,8 @@ def check_new_deals(keyword_map):
     print(f"🔍 검색 키워드: {target_keywords}")
 
     try:
-        response = requests.get(TARGET_URL, headers=HEADERS)
-        if response.status_code != 200:
-            print(f"접속 실패: {response.status_code}")
-            return
+        response = http_session.get(TARGET_URL, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
 
         soup = BeautifulSoup(response.text, 'html.parser')
         rows = soup.select(".market-info-list tr")
@@ -135,6 +154,8 @@ def check_new_deals(keyword_map):
 
                 mark_as_sent(post_id, title)
 
+    except requests.RequestException as e:
+        print(f"네트워크 오류: {e}")
     except Exception as e:
         print(f"에러 발생: {e}")
 
