@@ -63,7 +63,7 @@ def mark_as_sent(post_id, title):
 def send_fcm_notification(tokens, title, body, link):
     # FCM 알림 발송 함수 (키워드가 여러 개 겹쳐도 한 번만 호출됨)
     if not tokens:
-        return
+        return 0
 
     # 토큰이 500개가 넘어가면 끊어서 보내야 하지만, 현재 규모에선 패스
     try:
@@ -80,9 +80,11 @@ def send_fcm_notification(tokens, title, body, link):
 
         response = messaging.send_multicast(message)
         print(f"   ㄴ 🚀 알림 발송 완료! (성공: {response.success_count}건)")
+        return response.success_count
 
     except Exception as e:
         print(f"   ㄴ ❌ 알림 발송 실패: {e}")
+        return 0
 
 
 def get_keywords_info():
@@ -150,9 +152,11 @@ def check_new_deals(keyword_map):
                 keywords_str = ", ".join(matched_keywords)
                 noti_title = f"키워드 발견! [{keywords_str}]"
 
-                send_fcm_notification(list(target_tokens), noti_title, title, link)
-
-                mark_as_sent(post_id, title)
+                success_count = send_fcm_notification(list(target_tokens), noti_title, title, link)
+                if success_count > 0:
+                    mark_as_sent(post_id, title)
+                else:
+                    print("   ㄴ ⚠️ 알림 전송 성공 건이 없어 sent_logs 저장을 생략합니다.")
 
     except requests.RequestException as e:
         print(f"네트워크 오류: {e}")
