@@ -49,6 +49,18 @@ def is_already_sent(post_id):
     return doc.exists
 
 
+def get_sent_post_ids(post_ids):
+    if not post_ids:
+        return set()
+
+    refs = [db.collection('sent_logs').document(post_id) for post_id in post_ids]
+    sent_ids = set()
+    for doc in db.get_all(refs):
+        if doc.exists:
+            sent_ids.add(doc.id)
+    return sent_ids
+
+
 def mark_as_sent(post_id, title):
     # 보낸 기록을 DB에 저장
     try:
@@ -114,23 +126,28 @@ def check_new_deals(keyword_map):
         rows = soup.select(".market-info-list tr")
 
         # 상위 10개만 탐색
+        candidates = []
         for row in rows[:10]:
             title_tag = row.select_one(".tit .subject-link")
             if not title_tag: continue
-
-            title = title_tag.get_text(strip=True)
-            link = "https://quasarzone.com" + title_tag['href']
-
-            post_id = get_post_id(link)
-
-            # 이미 보낸 글이면 패스
-            if is_already_sent(post_id):
-                continue
 
             # 판매 종료/완료 확인
             status_tag = row.select_one(".label")
             status = status_tag.get_text(strip=True) if status_tag else ""
             if "종료" in status or "완료" in status:
+                continue
+
+            title = title_tag.get_text(strip=True)
+            link = "https://quasarzone.com" + title_tag['href']
+
+            post_id = get_post_id(link)
+            candidates.append((post_id, title, link))
+
+        sent_post_ids = get_sent_post_ids([post_id for post_id, _, _ in candidates])
+
+        for post_id, title, link in candidates:
+            # 이미 보낸 글이면 패스
+            if post_id in sent_post_ids:
                 continue
 
             # 중복 알림 방지
