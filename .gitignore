@@ -1,0 +1,7 @@
+.DS_Store
+
+# Crawler secrets and local IDE config
+/crawler/serviceAccountKey.json
+/crawler/.idea/
+/crawler/__pycache__/
+*.pyc
