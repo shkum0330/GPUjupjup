@@ -61,6 +61,11 @@ def get_sent_post_ids(post_ids):
     return sent_ids
 
 
+def chunk_tokens(tokens, size):
+    for idx in range(0, len(tokens), size):
+        yield tokens[idx:idx + size]
+
+
 def mark_as_sent(post_id, title):
     # 보낸 기록을 DB에 저장
     try:
@@ -75,28 +80,62 @@ def mark_as_sent(post_id, title):
 def send_fcm_notification(tokens, title, body, link):
     # FCM 알림 발송 함수 (키워드가 여러 개 겹쳐도 한 번만 호출됨)
     if not tokens:
-        return 0
+        return 0, set()
 
-    # 토큰이 500개가 넘어가면 끊어서 보내야 하지만, 현재 규모에선 패스
-    try:
-        message = messaging.MulticastMessage(
-            notification=messaging.Notification(
-                title=title,
-                body=body
-            ),
-            data={
-                "url": link,
-            },
-            tokens=tokens
-        )
+    unique_tokens = list(dict.fromkeys(tokens))
+    success_total = 0
+    invalid_tokens = set()
 
-        response = messaging.send_multicast(message)
-        print(f"   ㄴ 🚀 알림 발송 완료! (성공: {response.success_count}건)")
-        return response.success_count
+    for token_batch in chunk_tokens(unique_tokens, 500):
+        try:
+            message = messaging.MulticastMessage(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body
+                ),
+                data={
+                    "url": link,
+                },
+                tokens=token_batch
+            )
 
-    except Exception as e:
-        print(f"   ㄴ ❌ 알림 발송 실패: {e}")
-        return 0
+            response = messaging.send_multicast(message)
+            success_total += response.success_count
+
+            for idx, send_response in enumerate(response.responses):
+                if send_response.success:
+                    continue
+                error_text = str(send_response.exception).lower() if send_response.exception else ""
+                if (
+                    "registration-token-not-registered" in error_text
+                    or "invalid-registration-token" in error_text
+                    or "unregistered" in error_text
+                ):
+                    invalid_tokens.add(token_batch[idx])
+
+        except Exception as e:
+            print(f"   ㄴ ❌ 알림 발송 실패: {e}")
+
+    print(f"   ㄴ 🚀 알림 발송 완료! (성공: {success_total}건)")
+    return success_total, invalid_tokens
+
+
+def cleanup_invalid_tokens(keyword_map, invalid_tokens):
+    if not invalid_tokens:
+        return
+
+    for keyword, subscribers in keyword_map.items():
+        to_remove = list(set(subscribers) & invalid_tokens)
+        if not to_remove:
+            continue
+
+        try:
+            db.collection('keywords').document(keyword).update({
+                'subscribers': firestore.ArrayRemove(to_remove)
+            })
+            print(f"   ㄴ 🧹 무효 토큰 정리: {keyword} ({len(to_remove)}개)")
+        except Exception as e:
+            print(f"   ㄴ ⚠️ 무효 토큰 정리 실패({keyword}): {e}")
 
 
 def get_keywords_info():
@@ -169,11 +208,18 @@ def check_new_deals(keyword_map):
                 keywords_str = ", ".join(matched_keywords)
                 noti_title = f"키워드 발견! [{keywords_str}]"
 
-                success_count = send_fcm_notification(list(target_tokens), noti_title, title, link)
+                success_count, invalid_tokens = send_fcm_notification(
+                    list(target_tokens),
+                    noti_title,
+                    title,
+                    link
+                )
                 if success_count > 0:
                     mark_as_sent(post_id, title)
                 else:
                     print("   ㄴ ⚠️ 알림 전송 성공 건이 없어 sent_logs 저장을 생략합니다.")
+
+                cleanup_invalid_tokens(keyword_map, invalid_tokens)
 
     except requests.RequestException as e:
         print(f"네트워크 오류: {e}")
