@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
@@ -187,15 +188,12 @@ class MainActivity : ComponentActivity() {
     // 등록 함수 (등록 후 콜백 실행)
     private fun saveKeyword(db: FirebaseFirestore, keyword: String, token: String, onSuccess: () -> Unit) {
         val docRef = db.collection("keywords").document(keyword)
-        docRef.get().addOnSuccessListener { document ->
-            if (document.exists()) {
-                docRef.update("subscribers", FieldValue.arrayUnion(token))
-                    .addOnSuccessListener { onSuccess() }
-            } else {
-                val data = hashMapOf("subscribers" to arrayListOf(token))
-                docRef.set(data).addOnSuccessListener { onSuccess() }
-            }
+        docRef.set(
+            mapOf("subscribers" to FieldValue.arrayUnion(token)),
+            SetOptions.merge()
+        ).addOnSuccessListener {
             Toast.makeText(this, "'$keyword' 등록됨", Toast.LENGTH_SHORT).show()
+            onSuccess()
         }
     }
 
