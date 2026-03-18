@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
             }
 
             Spacer(modifier = Modifier.height(30.dp))
-            Divider()
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(10.dp))
 
             // 등록된 키워드 목록 리스트
